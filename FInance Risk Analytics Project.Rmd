@@ -1,0 +1,634 @@
+---
+title: "Finance Analytics Project"
+author: "Yashdeep"
+date: "23/04/2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+## Setup root directory for R Markdown
+
+```{r setup}
+knitr::opts_knit$set(root.dir = 'C:/Users/Hp/Desktop/R Programming')
+```
+
+## Environment Setup
+
+```{r}
+setwd("C:/Users/Hp/Desktop/R Programming")
+getwd()
+```
+
+## Invoke Libraries
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(corrplot)
+library(Hmisc)
+library(data.table)
+library(dplyr)
+library(lmtest)
+library(pscl)
+library(rms)
+library(ROCR)
+library(pROC)
+```
+
+## Data Import
+
+```{r}
+TrainData <- read_excel("raw-data.xlsx" )
+TrainData <- as.data.frame(TrainData)
+attach(TrainData)
+TestData <- read_excel("validation_data.xlsx")
+```
+
+## Creating Dependent Variable
+
+```{r}
+TrainData$Default <- factor(ifelse(`Networth Next Year` > 0, "No" , "Yes"))
+summary(TrainData$Default)
+TestData$Default <- as.factor(TestData$`Default - 1`)
+```
+
+## Cleaning Train and Test Data (Removing Variables with significant NA values - Criteria: More than 40% NA's) 
+
+```{r}
+TrainData$`Deposits (accepted by commercial banks)` <- NULL
+TrainData$Num <- NULL
+TrainData$`Income from financial services` <-  NULL
+TrainData$`Other income` <- NULL
+TrainData$`Deferred tax liability` <- NULL
+TrainData$`Contingent liabilities` <- NULL
+TrainData$Investments <- NULL
+TrainData$`PE on BSE` <- NULL 
+TrainData$`Equity face value` <- NULL
+TrainData$`Shares outstanding` <- NULL 
+TrainData$`WIP turnover` <- NULL 
+TrainData$`Finished goods turnover` <- NULL
+
+TestData$`Deposits (accepted by commercial banks)` <- NULL
+TestData$Num <- NULL
+TestData$`Income from financial services` <-  NULL
+TestData$`Other income` <- NULL
+TestData$`Deferred tax liability` <- NULL
+TestData$`Contingent liabilities` <- NULL
+TestData$Investments <- NULL
+TestData$`PE on BSE` <- NULL 
+TestData$`Equity face value` <- NULL
+TestData$`Shares outstanding` <- NULL 
+TestData$`WIP turnover` <- NULL 
+TestData$`Finished goods turnover` <- NULL
+```
+
+## Changing class of variable to relevant data type
+
+```{r}
+sapply(TrainData, class)
+TrainData[,35:37] <- sapply(TrainData[,35:37], as.numeric)
+```
+
+## Removing NA values from Train Dataset
+
+```{r}
+summary(TrainData$`Total income`[TrainData$Default == "Yes"])
+summary(TrainData$`Total income`[TrainData$Default == "No"])
+
+TrainData$`Total income`[is.na(TrainData$`Total income`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Total income`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Total income`[is.na(TrainData$`Total income`) & TrainData$Default == "No"] = 
+  median(TrainData$`Total income`[TrainData$Default == "No"], na.rm = T) 
+
+TrainData$`Change in stock`[is.na(TrainData$`Change in stock`)] <- median(TrainData$`Change in stock`, na.rm = T)
+summary(TrainData$`Change in stock`)
+
+summary(TrainData$`Total expenses`[TrainData$Default == "Yes"])
+summary(TrainData$`Total expenses`[TrainData$Default == "No"])
+
+TrainData$`Total expenses`[is.na(TrainData$`Total expenses`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Total expenses`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Total expenses`[is.na(TrainData$`Total expenses`) & TrainData$Default == "No"] = 
+  median(TrainData$`Total expenses`[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$`Profit after tax`[TrainData$Default == "Yes"])
+summary(TrainData$`Profit after tax`[TrainData$Default == "No"])
+
+TrainData$`Profit after tax`[is.na(TrainData$`Profit after tax`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Profit after tax`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Profit after tax`[is.na(TrainData$`Profit after tax`) & TrainData$Default == "No"] = 
+  median(TrainData$`Profit after tax`[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$PBDITA[TrainData$Default == "Yes"])
+summary(TrainData$PBDITA[TrainData$Default == "No"])
+
+TrainData$PBDITA[is.na(TrainData$PBDITA) & TrainData$Default == "Yes"] =
+  median(TrainData$PBDITA[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$PBDITA[is.na(TrainData$PBDITA) & TrainData$Default == "No"] = 
+  median(TrainData$PBDITA[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$PBT[TrainData$Default == "Yes"])
+summary(TrainData$PBT[TrainData$Default == "No"])
+
+TrainData$PBT[is.na(TrainData$PBT) & TrainData$Default == "Yes"] =
+  median(TrainData$PBT[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$PBT[is.na(TrainData$PBT) & TrainData$Default == "No"] = 
+  median(TrainData$PBT[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$`Cash profit`[TrainData$Default == "Yes"])
+summary(TrainData$`Cash profit`[TrainData$Default == "No"])
+
+TrainData$`Cash profit`[is.na(TrainData$`Cash profit`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Cash profit`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Cash profit`[is.na(TrainData$`Cash profit`) & TrainData$Default == "No"] = 
+  median(TrainData$`Cash profit`[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$`PBDITA as % of total income`[TrainData$Default == "Yes"])
+summary(TrainData$`PBDITA as % of total income`[TrainData$Default == "No"])
+
+TrainData$`PBDITA as % of total income`[is.na(TrainData$`PBDITA as % of total income`) & TrainData$Default == "Yes"] =
+  median(TrainData$`PBDITA as % of total income`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`PBDITA as % of total income`[is.na(TrainData$`PBDITA as % of total income`) & TrainData$Default == "No"] = 
+  median(TrainData$`PBDITA as % of total income`[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$`PBT as % of total income`[TrainData$Default == "Yes"])
+summary(TrainData$`PBT as % of total income`[TrainData$Default == "No"])
+
+TrainData$`PBT as % of total income`[is.na(TrainData$`PBT as % of total income`) & TrainData$Default == "Yes"] =
+  median(TrainData$`PBT as % of total income`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`PBT as % of total income`[is.na(TrainData$`PBT as % of total income`) & TrainData$Default == "No"] = 
+  median(TrainData$`PBT as % of total income`[TrainData$Default == "No"], na.rm = T) 
+
+summary(TrainData$`PAT as % of total income`[TrainData$Default == "Yes"])
+summary(TrainData$`PAT as % of total income`[TrainData$Default == "No"])
+
+TrainData$`PAT as % of total income`[is.na(TrainData$`PAT as % of total income`) & TrainData$Default == "Yes"] =
+  median(TrainData$`PAT as % of total income`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`PAT as % of total income`[is.na(TrainData$`PAT as % of total income`) & TrainData$Default == "No"] = 
+  median(TrainData$`PAT as % of total income`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Cash profit as % of total income`[TrainData$Default == "Yes"])
+summary(TrainData$`Cash profit as % of total income`[TrainData$Default == "No"])
+
+TrainData$`Cash profit as % of total income`[is.na(TrainData$`Cash profit as % of total income`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Cash profit as % of total income`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Cash profit as % of total income`[is.na(TrainData$`Cash profit as % of total income`) & TrainData$Default == "No"] = 
+  median(TrainData$`Cash profit as % of total income`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$Sales[TrainData$Default == "Yes"])
+summary(TrainData$Sales[TrainData$Default == "No"])
+
+TrainData$Sales[is.na(TrainData$Sales) & TrainData$Default == "Yes"] =
+  median(TrainData$Sales[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$Sales[is.na(TrainData$Sales) & TrainData$Default == "No"] = 
+  median(TrainData$Sales[TrainData$Default == "No"], na.rm = T)
+
+TrainData$`Total capital`[is.na(TrainData$`Total capital`)] <- median(TrainData$`Total capital`, na.rm = TRUE)
+
+summary(TrainData$`Reserves and funds`[TrainData$Default == "Yes"])
+summary(TrainData$`Reserves and funds`[TrainData$Default == "No"])
+
+TrainData$`Reserves and funds`[is.na(TrainData$`Reserves and funds`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Reserves and funds`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Reserves and funds`[is.na(TrainData$`Reserves and funds`) & TrainData$Default == "No"] = 
+  median(TrainData$`Reserves and funds`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$Borrowings[TrainData$Default == "Yes"])
+summary(TrainData$Borrowings[TrainData$Default == "No"])
+
+TrainData$Borrowings[is.na(TrainData$Borrowings) & TrainData$Default == "Yes"] =
+  median(TrainData$Borrowings[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$Borrowings[is.na(TrainData$Borrowings) & TrainData$Default == "No"] = 
+  median(TrainData$Borrowings[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Current liabilities & provisions`[TrainData$Default == "Yes"])
+summary(TrainData$`Current liabilities & provisions`[TrainData$Default == "No"])
+
+TrainData$`Current liabilities & provisions`[is.na(TrainData$`Current liabilities & provisions`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Current liabilities & provisions`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Current liabilities & provisions`[is.na(TrainData$`Current liabilities & provisions`) & TrainData$Default == "No"] = 
+  median(TrainData$`Current liabilities & provisions`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Cumulative retained profits`[TrainData$Default == "Yes"])
+summary(TrainData$`Cumulative retained profits`[TrainData$Default == "No"])
+
+TrainData$`Cumulative retained profits`[is.na(TrainData$`Cumulative retained profits`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Cumulative retained profits`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Cumulative retained profits`[is.na(TrainData$`Cumulative retained profits`) & TrainData$Default == "No"] = 
+  median(TrainData$`Cumulative retained profits`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Net fixed assets`[TrainData$Default == "Yes"])
+summary(TrainData$`Net fixed assets`[TrainData$Default == "No"])
+
+TrainData$`Net fixed assets`[is.na(TrainData$`Net fixed assets`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Net fixed assets`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Net fixed assets`[is.na(TrainData$`Net fixed assets`) & TrainData$Default == "No"] = 
+  median(TrainData$`Net fixed assets`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Current assets`[TrainData$Default == "Yes"])
+summary(TrainData$`Current assets`[TrainData$Default == "No"])
+
+TrainData$`Current assets`[is.na(TrainData$`Current assets`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Current assets`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Current assets`[is.na(TrainData$`Current assets`) & TrainData$Default == "No"] = 
+  median(TrainData$`Current assets`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Net working capital`[TrainData$Default == "Yes"])
+summary(TrainData$`Net working capital`[TrainData$Default == "No"])
+
+TrainData$`Net working capital`[is.na(TrainData$`Net working capital`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Net working capital`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Net working capital`[is.na(TrainData$`Net working capital`) & TrainData$Default == "No"] = 
+  median(TrainData$`Net working capital`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Quick ratio (times)`[TrainData$Default == "Yes"])
+summary(TrainData$`Quick ratio (times)`[TrainData$Default == "No"])
+
+TrainData$`Quick ratio (times)`[is.na(TrainData$`Quick ratio (times)`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Quick ratio (times)`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Quick ratio (times)`[is.na(TrainData$`Quick ratio (times)`) & TrainData$Default == "No"] = 
+  median(TrainData$`Quick ratio (times)`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Current ratio (times)`[TrainData$Default == "Yes"])
+summary(TrainData$`Current ratio (times)`[TrainData$Default == "No"])
+
+TrainData$`Current ratio (times)`[is.na(TrainData$`Current ratio (times)`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Current ratio (times)`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Current ratio (times)`[is.na(TrainData$`Current ratio (times)`) & TrainData$Default == "No"] = 
+  median(TrainData$`Current ratio (times)`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Cash to current liabilities (times)`[TrainData$Default == "Yes"])
+summary(TrainData$`Cash to current liabilities (times)`[TrainData$Default == "No"])
+
+TrainData$`Cash to current liabilities (times)`[is.na(TrainData$`Cash to current liabilities (times)`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Cash to current liabilities (times)`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Cash to current liabilities (times)`[is.na(TrainData$`Cash to current liabilities (times)`) & TrainData$Default == "No"] = 
+  median(TrainData$`Cash to current liabilities (times)`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Cash to average cost of sales per day`[TrainData$Default == "Yes"])
+summary(TrainData$`Cash to average cost of sales per day`[TrainData$Default == "No"])
+
+TrainData$`Cash to average cost of sales per day`[is.na(TrainData$`Cash to average cost of sales per day`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Cash to average cost of sales per day`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Cash to average cost of sales per day`[is.na(TrainData$`Cash to average cost of sales per day`) & TrainData$Default == "No"] = 
+  median(TrainData$`Cash to average cost of sales per day`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Creditors turnover`[TrainData$Default == "Yes"])
+summary(TrainData$`Creditors turnover`[TrainData$Default == "No"])
+
+TrainData$`Creditors turnover`[is.na(TrainData$`Creditors turnover`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Creditors turnover`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Creditors turnover`[is.na(TrainData$`Creditors turnover`) & TrainData$Default == "No"] = 
+  median(TrainData$`Creditors turnover`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Debtors turnover`[TrainData$Default == "Yes"])
+summary(TrainData$`Debtors turnover`[TrainData$Default == "No"])
+
+TrainData$`Debtors turnover`[is.na(TrainData$`Debtors turnover`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Debtors turnover`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Debtors turnover`[is.na(TrainData$`Debtors turnover`) & TrainData$Default == "No"] = 
+  median(TrainData$`Debtors turnover`[TrainData$Default == "No"], na.rm = T)
+
+summary(TrainData$`Raw material turnover`[TrainData$Default == "Yes"])
+summary(TrainData$`Raw material turnover`[TrainData$Default == "No"])
+
+TrainData$`Raw material turnover`[is.na(TrainData$`Raw material turnover`) & TrainData$Default == "Yes"] =
+  median(TrainData$`Raw material turnover`[TrainData$Default == "Yes"], na.rm = T)
+
+TrainData$`Raw material turnover`[is.na(TrainData$`Raw material turnover`) & TrainData$Default == "No"] = 
+  median(TrainData$`Raw material turnover`[TrainData$Default == "No"], na.rm = T)
+```
+
+## Structure, Summary, Dimensions and Verifying elimated NA values
+
+```{r}
+colSums(is.na(TrainData))
+sum(is.na(TrainData))
+dim(TrainData)
+summary(TrainData)
+str(TrainData)
+```
+
+## Creating New Variable Capital as a Percentage of Assets (Company's Size)
+
+```{r}
+TrainData$Size.Ratio.CapitalAsPerc.Assets <- (TrainData$`Total capital`/TrainData$`Total assets`) *100
+summary(TrainData$Size.Ratio.CapitalAsPerc.Assets)
+TestData$Size.Ratio.CapitalAsPerc.Assets <- (TestData$`Total capital`/TestData$`Total assets`) *100
+summary(TestData$Size.Ratio.CapitalAsPerc.Assets)
+```
+
+## Profit before depreciation, income tax and amortization as a percentage of Total Income (Profitabilty)
+
+```{r}
+TrainData$PBDITA.PERC.TotalIncome <- (TrainData$PBDITA/TrainData$`Total income`)*100
+summary(TrainData$PBDITA.PERC.TotalIncome)
+```
+
+## Creating New Ratio Variable for leverage using Borrowings and Current Liabilities
+
+```{r}
+TrainData$Leverage.Ratio <- (TrainData$`Total liabilities` - TrainData$Borrowings)/`Total liabilities`
+summary(TrainData$Leverage.Ratio)
+TestData$Leverage.Ratio <- (TestData$`Total liabilities` - TestData$Borrowings)/TestData$`Total liabilities`
+summary(TestData$Leverage.Ratio)
+```
+
+## Creating new variable for Liquidity - Net Working Capital divided by Total Liabilities
+
+```{r}
+TrainData$Liquidity.Ratio.CapitalByLiabilities <- (TrainData$`Net working capital`/TrainData$`Total liabilities`)
+summary(TrainData$Liquidity.Ratio.CapitalByLiabilities)
+TestData$Liquidity.Ratio.CapitalByLiabilities <- (TestData$`Net working capital`/TestData$`Total liabilities`)
+summary(TestData$Liquidity.Ratio.CapitalByLiabilities)
+```
+
+## Check for Multicollinearity 
+
+```{r}
+head(TrainData)
+Matrix1 <- cor(TrainData[,2:15])
+Matrix2 <- cor(TrainData[,16:30])
+Matrix3 <- cor(TrainData[ ,c(31:40,42,43,44,45)])
+corrplot(Matrix1, method = "pie", type = "upper")
+corrplot(Matrix2,method = "pie", type = "upper")
+corrplot(Matrix3, method = "pie", type = "upper")
+```
+
+## Outlier Treatment for Significant Variables using flooring/capping (Variables to be used in Model)
+
+```{r}
+summary(TrainData$`Total income`)
+IQRIncome = IQR(TrainData$`Total income`)
+LLIncome = quantile(TrainData$`Total income`,0.25) - 1.5*IQRIncome
+ULIncome = quantile(TrainData$`Total income`,0.75) + 1.5*IQRIncome
+IncomeOut = subset(TrainData, `Total income` < LLIncome | `Total income` > ULIncome)
+dim(IncomeOut)
+
+IncomeWOUT = subset(TrainData, `Total income` >= LLIncome & `Total income` <= ULIncome)
+dim(IncomeWOUT)
+max(IncomeWOUT$`Total income`)
+summary(TrainData$`Total income`)
+TrainData$`Total income`[TrainData$`Total income` > 3171.7] = 3171.7
+boxplot(TrainData$`Total income`, main = "Boxplot of Total Income Post Outlier Treatment", xlab = "Total Income")
+
+summary(TrainData$`Profit after tax`)
+IQRPAT = IQR(TrainData$`Profit after tax`)
+LLPAT = quantile(TrainData$`Profit after tax`,0.25) - 1.5*IQRPAT
+ULPAT = quantile(TrainData$`Profit after tax`,0.75) + 1.5*IQRPAT
+PATOut = subset(TrainData, `Profit after tax` < LLPAT | `Profit after tax` > ULPAT)
+dim(PATOut)
+
+PATWOUT = subset(TrainData, `Profit after tax` >= LLPAT & `Profit after tax` <= ULPAT)
+dim(PATWOUT)
+max(PATWOUT$`Profit after tax`)
+min(PATWOUT$`Profit after tax`)
+summary(TrainData$`Profit after tax`)
+TrainData$`Profit after tax`[TrainData$`Profit after tax` >= 119.2] = 119.2
+TrainData$`Profit after tax`[TrainData$`Profit after tax` <= -70.9] = -70.9
+boxplot(TrainData$`Profit after tax`, main = "Boxplot of Profit after Tax Post Outlier Treatment", xlab = "Profit after tax")
+
+summary(TrainData$`PAT as % of net worth`)
+IQRPATNW = IQR(TrainData$`PAT as % of net worth`)
+LLPATNW = quantile(TrainData$`PAT as % of net worth`,0.25) - 1.5*IQRPATNW
+ULPATNW = quantile(TrainData$`PAT as % of net worth`,0.75) + 1.5*IQRPATNW
+PATNWOut = subset(TrainData, `PAT as % of net worth` < LLPATNW | `PAT as % of net worth` > ULPATNW)
+dim(PATNWOut)
+
+PATNWWOUT = subset(TrainData, `PAT as % of net worth` >= LLPATNW & `PAT as % of net worth` <= ULPATNW)
+dim(PATNWWOUT)
+max(PATWOUT$`PAT as % of net worth`)
+min(PATWOUT$`PAT as % of net worth`)
+summary(TrainData$`PAT as % of net worth`)
+TrainData$`PAT as % of net worth`[TrainData$`PAT as % of net worth` >= 2466.67] = 2466.67
+TrainData$`PAT as % of net worth`[TrainData$`PAT as % of net worth` <= -584.44] = -584.44
+boxplot(TrainData$`PAT as % of net worth`, main = "Boxplot of PAT as % of net worth Post Outlier Treatment", xlab = "PAT as % of net worth")
+
+summary(TrainData$`Debt to equity ratio (times)`)
+boxplot(TrainData$`Debt to equity ratio (times)`)
+IQRDTE = IQR(TrainData$`Debt to equity ratio (times)`)
+LLDTE = quantile(TrainData$`Debt to equity ratio (times)`,0.25) - 1.5*IQRDTE
+ULDTE = quantile(TrainData$`Debt to equity ratio (times)`,0.75) + 1.5*IQRDTE
+DTEOut = subset(TrainData, `Debt to equity ratio (times)` < LLDTE | `Debt to equity ratio (times)` > ULDTE)
+dim(DTEOut)
+
+DTEWOUT = subset(TrainData, `Debt to equity ratio (times)` >= LLDTE & `Debt to equity ratio (times)` <= ULDTE)
+dim(DTEWOUT)
+max(DTEWOUT$`Debt to equity ratio (times)`)
+summary(TrainData$`Debt to equity ratio (times)`)
+TrainData$`Debt to equity ratio (times)`[TrainData$`Debt to equity ratio (times)` >= 4.04] = 4.04
+boxplot(TrainData$`Debt to equity ratio (times)`,  main = "Boxplot of Debt to Equity Ratio Post Outlier Treatment", xlab = "Debt to Equity Ratio")
+
+summary(TrainData$`Net working capital`)
+boxplot(TrainData$`Net working capital`)
+IQRNWC = IQR(TrainData$`Net working capital`)
+LLNWC = quantile(TrainData$`Net working capital`,0.25) - 1.5*IQRNWC
+ULNWC = quantile(TrainData$`Net working capital`,0.75) + 1.5*IQRNWC
+NWCOut = subset(TrainData, `Net working capital` < LLNWC | `Net working capital` > ULNWC)
+dim(NWCOut)
+
+NWCWOUT = subset(TrainData, `Net working capital` >= LLNWC & `Net working capital` <= ULNWC)
+dim(NWCWOUT)
+max(NWCWOUT$`Net working capital`)
+min(NWCWOUT$`Net working capital`)
+summary(TrainData$`Net working capital`)
+TrainData$`Net working capital`[TrainData$`Net working capital` >= 205.2] = 205.2
+TrainData$`Net working capital`[TrainData$`Net working capital` <= -123.7] = -123.7
+boxplot(TrainData$`Net working capital`, main = "Boxplot of Net Working Capital Post Outlier Treatment", xlab = "Net Working Capital")
+```
+
+## Univariate and Bivariate Analysis
+
+```{r}
+qplot(TrainData$Default, xlab = "Default", ylab = "Count", 
+      main  = "Distribution of Default ", fill = TrainData$Default) + theme(plot.title = element_text(hjust = 0.5)) +  labs(fill='Default')
+
+ggplot(TrainData, aes(x=`Profit after tax`), main  = "Density Distribution of Profit after Tax") +   geom_density() + geom_vline(aes(xintercept=mean(`Profit after tax`)),
+            color="blue", linetype="dashed", size=1)
+
+ggplot(TrainData, aes(x=`Total income`),main  = "Density Distribution of Total Income") +   geom_density() + geom_vline(aes(xintercept=mean(`Total income`)),
+            color="blue", linetype="dashed", size=1)
+
+qplot(`PAT as % of net worth`, `PAT as % of total income`, xlab = "Profit After Tax as % of Net Worth", 
+      ylab = "Profit after Tax as a % of Total Income", 
+      main  = "Profit After Tax as % of Net Worth V/S Profit after Tax as a % of Total Income" + 
+  theme(plot.title = element_text(hjust = 0.5)) + geom_smooth(method = "lm"))
+
+qplot(`Total income`, `Total liabilities`, xlab = "Income", 
+      ylab = "Total Liabilities", 
+      main  = "Relationship of Income V/S Total Liabilities") + 
+  theme(plot.title = element_text(hjust = 0.5)) + geom_smooth(method = "lm")
+
+qplot(TrainData$Leverage.Ratio, `Total liabilities`, xlab = "Leverage Ratio", 
+      ylab = "Total Liabilities", 
+      main  = "Relationship of Leverage Ratio V/S Total Liabilities") + 
+  theme(plot.title = element_text(hjust = 0.5)) + geom_smooth(method = "lm")
+
+
+qplot(Sales, `Profit after tax`, xlab = "Sales", 
+      ylab = "Profit After Tax", 
+      main  = "Relationship of Sales V/S Profit After Tax") + 
+  theme(plot.title = element_text(hjust = 0.5)) + geom_smooth(method = "lm")
+
+ggplot(TrainData, aes(x = Default, y = TrainData$`Total income`), ylab = "Total Income" ) + geom_boxplot() + ggtitle("Boxplot of Default against Total Income") +   theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(TrainData, aes(x = Default, y = TrainData$`Debt to equity ratio (times)`), ylab = "Debt to Equity") + geom_boxplot() + ggtitle("Boxplot of Default against Debt to Equity Ratio") + theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+## Data Slicing
+
+```{r}
+prop.table(table(TrainData$Default))
+
+prop.table(table(TestData$Default))
+```
+
+## Logistic Regression Model Creation
+
+```{r}
+Log.Reg.Model <- glm(Default~`Total expenses`+ PBT + `PAT as % of net worth`+`Net working capital`+`Debt to equity ratio (times)`+
+                        Leverage.Ratio+ Liquidity.Ratio.CapitalByLiabilities+Size.Ratio.CapitalAsPerc.Assets,data = TrainData, family = "binomial")
+
+summary(Log.Reg.Model)
+
+vif(Log.Reg.Model)
+```
+
+## Model Performance Measures
+
+```{r}
+anova(Log.Reg.Model)
+pR2(Log.Reg.Model)
+```
+
+## Determining Threshold for Logisitc Regression Model
+
+```{r}
+summary(Log.Reg.Model$fitted.values)
+plot(Log.Reg.Model$fitted.values)
+plot(TrainData$Default, Log.Reg.Model$fitted.values)
+```
+
+## Prediction and Confusion Matrix on Train Dataset
+
+```{r}
+Log.Reg.Predict <- predict(Log.Reg.Model,data = TrainData, type = "response")
+M <- table(TrainData$Default,Log.Reg.Predict > 0.13)
+M
+```
+
+## Model Evaluation (Error Rate, Accuracy, Sensitivity, Specificity, Precision, F Score) on Train Dataset
+
+```{r}
+Classification.error.rate.log.reg.train <- (M[1,2]+M[2,1])/nrow(TrainData)
+Classification.error.rate.log.reg.train*100
+Accuracy.log.reg.train <- 1 - Classification.error.rate.log.reg.train
+Accuracy.log.reg.train*100
+
+Sensitivity <- M[1,1]/(M[1,1]+M[1,2])
+Sensitivity
+Specificity <- M[2,2]/(M[2,1]+M[2,2]) 
+Specificity
+Precision <- M[1,1]/(M[1,1]+M[2,1])
+Precision
+FScore <- 2*((Precision*Sensitivity)/(Precision+Sensitivity))
+FScore
+```
+
+## Rank Ordered Tables and K.S Statistic
+
+```{r}
+TrainData$Prob <- predict(Log.Reg.Model, data = TrainData, type = "response")
+
+probs <- seq(0,1,length = 11 )
+QS <- quantile(TrainData$Prob, probs)
+TrainData$Decile <- cut(TrainData$Prob, unique(QS), include.lowest = TRUE)
+TrainDT <- data.table(TrainData)
+RankTable <- TrainDT[, list(Count= length(Default), Defaulters = sum(Default== "Yes"), 
+                            NonDefaulters = sum(Default=="No")), by = Decile][order(-Decile)] 
+RankTable$DRate <- round(RankTable$Defaulters/RankTable$Count, 4)*100
+RankTable$CumDefaulters <- cumsum(RankTable$Defaulters)
+RankTable$CumNonDefaulters <- cumsum(RankTable$NonDefaulters)
+RankTable$CumRelDefault <- round(RankTable$Defaulters/sum(RankTable$Defaulters),4)*100
+RankTable$CumRelNonDefault <- round(RankTable$NonDefaulters/sum(RankTable$NonDefaulters),4)*100
+RankTable$KS <- abs(RankTable$CumRelDefault-RankTable$CumRelNonDefault)
+
+RankTable
+```
+
+## Prediction and Confusion Matrix on Test Dataset
+
+```{r}
+Predicted.Test <- predict(Log.Reg.Model, newdata = TestData, type = "response")
+M1 <- table(TestData$Default,Predicted.Test > 0.13)
+M1
+```
+
+## Model Evaluation (Error Rate, Accuracy, Sensitivity, Specificity, Precision, F Score) on Test Dataset
+
+```{r}
+Classification.error.rate.log.reg.test <- (M1[1,2]+M1[2,1])/nrow(TestData)
+Classification.error.rate.log.reg.test*100
+Accuracy.log.reg.test <- 1 - Classification.error.rate.log.reg.test
+Accuracy.log.reg.test*100
+
+Sensitivity.Test <- M1[1,1]/(M1[1,1]+M1[1,2])
+Sensitivity.Test
+Specificity.Test <- M1[2,2]/(M1[2,1]+M1[2,2]) 
+Specificity.Test
+Precision.Test <- M1[1,1]/(M1[1,1]+M1[2,1])
+Precision.Test
+FScore <- 2*((Precision*Sensitivity)/(Precision+Sensitivity))
+FScore
+```
+
+## Rank Ordered Tables and K.S Statistic on Test Dataset
+
+```{r}
+TestData$Prob <- predict(Log.Reg.Model, newdata = TestData, type = "response")
+summary(TestData$Prob)
+TestData$Prob[is.na(TestData$Prob)] = median(TestData$Prob, na.rm = TRUE)
+
+
+QS1 <- quantile(TestData$Prob, probs)
+TestData$Decile <- cut(TestData$Prob, unique(QS1), include.lowest = TRUE)
+TestDT <- data.table(TestData)
+RankTable.1 <- TestDT[, list(Count= length(Default), Defaulters = sum(Default== "Yes"), 
+                            NonDefaulters = sum(Default=="No")), by = Decile][order(-Decile)] 
+
+RankTable$DRate <- round(RankTable$Defaulters/RankTable$Count, 4)*100
+RankTable$CumDefaulters <- cumsum(RankTable$Defaulters)
+RankTable$CumNonDefaulters <- cumsum(RankTable$NonDefaulters)
+RankTable$CumRelDefault <- round(RankTable$Defaulters/sum(RankTable$Defaulters),4)*100
+RankTable$CumRelNonDefault <- round(RankTable$NonDefaulters/sum(RankTable$NonDefaulters),4)*100
+RankTable$KS <- abs(RankTable$CumRelDefault-RankTable$CumRelNonDefault)
+
+RankTable
+```
+
